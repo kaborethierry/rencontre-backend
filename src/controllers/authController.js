@@ -13,13 +13,11 @@ const generateToken = (id) => {
 // Inscription
 const register = async (req, res) => {
   try {
-    // Vérifier les erreurs de validation
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    // Récupérer les données (peuvent venir de req.body ou de FormData)
     const nom = req.body.nom || req.body.get('nom');
     const prenom = req.body.prenom || req.body.get('prenom');
     const email = req.body.email || req.body.get('email');
@@ -32,7 +30,6 @@ const register = async (req, res) => {
     const sexe = req.body.sexe || req.body.get('sexe');
     const statut = req.body.statut || req.body.get('statut');
 
-    // Vérifier si l'utilisateur existe déjà
     const [existingUsers] = await pool.execute(
       'SELECT id FROM users WHERE email = ?',
       [email]
@@ -42,17 +39,16 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Cet email est déjà utilisé' });
     }
 
-    // Hasher le mot de passe
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Gérer la photo uploadée
+    // ✅ CORRECTION: Utiliser l'URL complète du backend
     let photoPath = null;
     if (req.file) {
-      photoPath = `/uploads/profiles/${req.file.filename}`;
+      const baseUrl = process.env.BACKEND_URL || 'https://green-alpaca-449310.hostingersite.com';
+      photoPath = `${baseUrl}/uploads/profiles/${req.file.filename}`;
     }
 
-    // Insérer l'utilisateur (avec rôle user par défaut)
     const [result] = await pool.execute(
       `INSERT INTO users 
        (nom, prenom, email, password, age, ville, profession, religion, description, photo, sexe, statut, role) 
@@ -70,17 +66,15 @@ const register = async (req, res) => {
         photoPath,
         sexe || 'Autre',
         statut || 'Célibataire',
-        'user' // Rôle par défaut
+        'user'
       ]
     );
 
-    // Récupérer l'utilisateur créé
     const [newUser] = await pool.execute(
       'SELECT id, nom, prenom, email, role, photo FROM users WHERE id = ?',
       [result.insertId]
     );
 
-    // Générer le token
     const token = generateToken(newUser[0].id);
 
     res.status(201).json({
@@ -100,7 +94,6 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Vérifier si l'utilisateur existe
     const [users] = await pool.execute(
       'SELECT * FROM users WHERE email = ?',
       [email]
@@ -112,28 +105,23 @@ const login = async (req, res) => {
 
     const user = users[0];
 
-    // Vérifier si le compte est actif
     if (user.isActive === 0) {
       return res.status(403).json({ message: 'Compte suspendu. Contactez l\'administrateur.' });
     }
 
-    // Vérifier le mot de passe
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
 
-    // Mettre à jour la dernière connexion
     await pool.execute(
       'UPDATE users SET lastLogin = NOW() WHERE id = ?',
       [user.id]
     );
 
-    // Générer le token
     const token = generateToken(user.id);
 
-    // Ne pas renvoyer le mot de passe
     delete user.password;
 
     res.json({
@@ -148,12 +136,10 @@ const login = async (req, res) => {
   }
 };
 
-// Déconnexion
 const logout = (req, res) => {
   res.json({ message: 'Déconnexion réussie' });
 };
 
-// Rafraîchir le token
 const refreshToken = async (req, res) => {
   try {
     const { token } = req.body;
@@ -183,7 +169,6 @@ const refreshToken = async (req, res) => {
   }
 };
 
-// Mot de passe oublié
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -214,7 +199,6 @@ const forgotPassword = async (req, res) => {
   }
 };
 
-// Réinitialiser le mot de passe
 const resetPassword = async (req, res) => {
   try {
     const { token, newPassword } = req.body;

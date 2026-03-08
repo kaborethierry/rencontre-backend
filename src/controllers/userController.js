@@ -31,11 +31,12 @@ const updateProfile = async (req, res) => {
     
     let photoPath = null;
     if (req.file) {
-      photoPath = `/uploads/profiles/${req.file.filename}`;
+      // ✅ CORRECTION: Utiliser l'URL complète du backend
+      const baseUrl = process.env.BACKEND_URL || 'https://green-alpaca-449310.hostingersite.com';
+      photoPath = `${baseUrl}/uploads/profiles/${req.file.filename}`;
       console.log("📸 Nouvelle photo uploadée:", photoPath);
     }
 
-    // Construire la requête dynamiquement
     let sql = 'UPDATE users SET ';
     const params = [];
     const updates = [];
@@ -65,7 +66,6 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
-    // Récupérer l'utilisateur mis à jour
     const [users] = await pool.execute(
       `SELECT id, nom, prenom, email, age, ville, profession, religion, 
               description, photo, sexe, statut, role 
@@ -156,7 +156,6 @@ const deleteAccount = async (req, res) => {
     const userId = req.user.id;
     console.log(`🗑️ Demande de suppression du compte utilisateur: ${userId}`);
 
-    // Vérifier que l'utilisateur existe
     const [users] = await pool.execute(
       'SELECT id, email FROM users WHERE id = ?',
       [userId]
@@ -166,7 +165,6 @@ const deleteAccount = async (req, res) => {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
-    // SUPPRESSION EN CASCADE
     await pool.execute('DELETE FROM users WHERE id = ?', [userId]);
 
     console.log(`✅ Compte utilisateur ${userId} (${users[0].email}) supprimé avec succès`);

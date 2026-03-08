@@ -28,7 +28,7 @@ const io = new Server(httpServer, {
   }
 });
 
-// ✅ SOLUTION POUR LE PROXY HOSTINGER (AJOUT CRITIQUE)
+// ✅ SOLUTION POUR LE PROXY HOSTINGER
 app.set('trust proxy', 1);
 
 testConnection();
@@ -45,24 +45,21 @@ if (isDev) {
   console.log('⚠️ Rate limiting désactivé en mode développement');
 } else {
   limiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute (au lieu de 15)
-    max: 30, // 30 requêtes par minute (suffisant pour un utilisateur normal)
+    windowMs: 60 * 1000, // 1 minute
+    max: 60, // 60 requêtes par minute (1 par seconde en moyenne)
     standardHeaders: true,
     legacyHeaders: false,
-    // Identification correcte de l'IP à travers le proxy
     keyGenerator: (req) => {
       return req.headers['x-forwarded-for']?.split(',')[0] || 
              req.ip || 
              req.connection.remoteAddress;
     },
     skip: (req) => {
-      // Ne pas limiter les routes statiques et health check
       return req.path === '/api/health' || req.path.startsWith('/uploads');
     },
     handler: (req, res) => {
       res.status(429).json({ 
-        message: 'Trop de requêtes. Veuillez patienter quelques instants.',
-        retryAfter: Math.ceil(req.rateLimit.resetTime / 1000 - Date.now() / 1000)
+        message: 'Trop de requêtes. Veuillez patienter quelques instants.'
       });
     }
   });
@@ -90,7 +87,6 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../uploads')));
 
-// Appliquer le rate limiter à toutes les routes API
 app.use('/api/', limiter);
 
 // Routes
