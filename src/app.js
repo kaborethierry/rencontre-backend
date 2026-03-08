@@ -16,7 +16,7 @@ const postRoutes = require('./routes/postRoutes');
 const likeRoutes = require('./routes/likeRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const messageRoutes = require('./routes/messageRoutes');
-const adminRoutes = require('./routes/adminRoutes');  // ← AJOUTÉ
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const httpServer = createServer(app);
@@ -28,12 +28,15 @@ const io = new Server(httpServer, {
   }
 });
 
+// ✅ SOLUTION POUR LE PROXY HOSTINGER (AJOUT CRITIQUE)
+app.set('trust proxy', 1);
+
 testConnection();
 
 // Socket.io
 require('./services/socketService')(io);
 
-// DÉSACTIVER LE RATE LIMITING EN DÉVELOPPEMENT
+// CONFIGURATION OPTIMISÉE DU RATE LIMITER
 const isDev = process.env.NODE_ENV === 'development';
 
 let limiter;
@@ -42,13 +45,24 @@ if (isDev) {
   console.log('⚠️ Rate limiting désactivé en mode développement');
 } else {
   limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 60 * 1000, // 1 minute (au lieu de 15)
+    max: 30, // 30 requêtes par minute (suffisant pour un utilisateur normal)
     standardHeaders: true,
     legacyHeaders: false,
+    // Identification correcte de l'IP à travers le proxy
+    keyGenerator: (req) => {
+      return req.headers['x-forwarded-for']?.split(',')[0] || 
+             req.ip || 
+             req.connection.remoteAddress;
+    },
+    skip: (req) => {
+      // Ne pas limiter les routes statiques et health check
+      return req.path === '/api/health' || req.path.startsWith('/uploads');
+    },
     handler: (req, res) => {
       res.status(429).json({ 
-        message: 'Trop de requêtes. Veuillez patienter quelques instants.' 
+        message: 'Trop de requêtes. Veuillez patienter quelques instants.',
+        retryAfter: Math.ceil(req.rateLimit.resetTime / 1000 - Date.now() / 1000)
       });
     }
   });
@@ -76,6 +90,7 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../uploads')));
 
+// Appliquer le rate limiter à toutes les routes API
 app.use('/api/', limiter);
 
 // Routes
@@ -85,7 +100,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/likes', likeRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
-app.use('/api/admin', adminRoutes);  // ← AJOUTÉ
+app.use('/api/admin', adminRoutes);
 
 // Route de test
 app.get('/api/health', (req, res) => {
