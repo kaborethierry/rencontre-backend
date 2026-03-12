@@ -31,6 +31,14 @@ const io = new Server(httpServer, {
 // ✅ SOLUTION POUR LE PROXY HOSTINGER
 app.set('trust proxy', 1);
 
+// ✅ REDIRECTION HTTP → HTTPS
+app.use((req, res, next) => {
+  if (req.headers['x-forwarded-proto'] !== 'https' && process.env.NODE_ENV === 'production') {
+    return res.redirect('https://' + req.headers.host + req.url);
+  }
+  next();
+});
+
 testConnection();
 
 // Socket.io
@@ -65,8 +73,14 @@ if (isDev) {
   });
 }
 
+// ✅ CONFIGURATION HELMET AVEC HSTS
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  hsts: {
+    maxAge: 31536000,      // 1 an en secondes
+    includeSubDomains: true,
+    preload: true
+  }
 }));
 
 app.use(cors({
