@@ -1,4 +1,3 @@
-// src/controllers/postController.js
 const { pool } = require('../config/db');
 const notificationController = require('./notificationController');
 
@@ -31,7 +30,6 @@ const createPost = async (req, res) => {
       );
       
       for (const admin of admins) {
-        // Créer une notification dans la base
         await notificationController.createNotification(
           admin.id,
           'post_approval',
@@ -40,7 +38,6 @@ const createPost = async (req, res) => {
           `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`
         );
         
-        // Envoyer une notification push
         await notificationController.sendPushNotification(
           admin.id,
           '📝 Nouvelle publication à approuver',
@@ -72,11 +69,10 @@ const getPosts = async (req, res) => {
        ORDER BY p.createdAt DESC`
     );
 
-    // Parsing JSON pour les likes
     const formattedPosts = posts.map(post => ({
       ...post,
       likesUsers: post.likesUsers ? JSON.parse(post.likesUsers) : [],
-      comments: [] // Les commentaires seront chargés séparément
+      comments: []
     }));
 
     res.json(formattedPosts);
@@ -86,21 +82,32 @@ const getPosts = async (req, res) => {
   }
 };
 
-// Récupérer les publications d'un utilisateur (profil public)
+// Récupérer les publications d'un utilisateur (avec statut)
 const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
+    const currentUserId = req.user?.id;
 
     const [posts] = await pool.execute(
-      `SELECT p.id, p.content, p.createdAt,
+      `SELECT p.id, p.content, p.createdAt, p.isApproved,
               u.id as userId, u.nom, u.prenom, u.photo
        FROM posts p
        JOIN users u ON p.userId = u.id
-       WHERE p.userId = ? AND p.isApproved = 1
+       WHERE p.userId = ?
        ORDER BY p.createdAt DESC`,
       [userId]
     );
-    res.json(posts);
+    
+    // Ajouter le statut pour chaque post
+    const postsWithStatus = posts.map(post => ({
+      ...post,
+      status: post.isApproved ? 'approved' : 'pending',
+      message: post.isApproved 
+        ? '✅ Publication approuvée et visible par tous' 
+        : '⏳ En attente d\'approbation par l\'administrateur'
+    }));
+
+    res.json(postsWithStatus);
   } catch (error) {
     console.error('❌ Erreur getUserPosts:', error);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -135,7 +142,6 @@ const approvePost = async (req, res) => {
       [id]
     );
     
-    // Récupérer les infos du post
     const [posts] = await pool.execute(
       `SELECT p.*, u.nom, u.prenom, u.email, u.id as userId
        FROM posts p
@@ -146,7 +152,6 @@ const approvePost = async (req, res) => {
     
     const post = posts[0];
     
-    // Notifier l'utilisateur
     await notificationController.createNotification(
       post.userId,
       'post_approved',
@@ -155,7 +160,6 @@ const approvePost = async (req, res) => {
       'Votre publication a été approuvée'
     );
     
-    // Notification push
     await notificationController.sendPushNotification(
       post.userId,
       '✅ Publication approuvée',
