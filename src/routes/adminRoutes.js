@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const postController = require('../controllers/postController'); // ← AJOUTER CETTE LIGNE
 const { protect, admin } = require('../middlewares/authMiddleware');
 
 // Toutes les routes admin nécessitent authentification ET rôle admin
@@ -17,6 +18,9 @@ router.delete('/users/:id', adminController.deleteUser);
 // Gestion des posts
 router.get('/posts', adminController.getAllPosts);
 router.delete('/posts/:id', adminController.deletePost);
+
+// ✅ NOUVELLE ROUTE POUR LES POSTS EN ATTENTE
+router.get('/posts/pending', postController.getPendingPosts);
 
 // Gestion des signalements
 router.get('/reports', adminController.getReports);

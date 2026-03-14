@@ -80,11 +80,11 @@ const getPosts = async (req, res) => {
          WHERE c.postId = p.id) as comments
        FROM posts p
        JOIN users u ON p.userId = u.id
-       WHERE p.isApproved = 1  -- ← SEULEMENT LES POSTS APPROUVÉS
+       WHERE p.isApproved = 1
        ORDER BY p.createdAt DESC`
     );
 
-    // Parsing JSON pour les commentaires
+    // Parsing JSON pour les commentaires et likes
     const formattedPosts = posts.map(post => ({
       ...post,
       likesUsers: post.likesUsers ? JSON.parse(post.likesUsers) : [],
