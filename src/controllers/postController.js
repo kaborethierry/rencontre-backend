@@ -1,15 +1,44 @@
 // src/controllers/postController.js
 const { pool } = require('../config/db');
+const notificationController = require('./notificationController');
 
-// Créer une publication
+// Créer une publication (en attente d'approbation)
 const createPost = async (req, res) => {
   try {
     const { content } = req.body;
     
+    // Par défaut, les posts sont en attente d'approbation
+    const isApproved = req.user.role === 'admin' ? 1 : 0;
+    
     const [result] = await pool.execute(
-      'INSERT INTO posts (userId, content) VALUES (?, ?)',
-      [req.user.id, content]
+      'INSERT INTO posts (userId, content, isApproved) VALUES (?, ?, ?)',
+      [req.user.id, content, isApproved]
     );
+
+    // Si ce n'est pas un admin, notifier les admins
+    if (!isApproved) {
+      const [admins] = await pool.execute(
+        'SELECT id FROM users WHERE role = "admin"'
+      );
+      
+      admins.forEach(admin => {
+        notificationController.createNotification(
+          admin.id,
+          'post_approval',
+          req.user.id,
+          result.insertId,
+          `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`
+        );
+        
+        // Notification push
+        notificationController.sendPushNotification(
+          admin.id,
+          '📝 Nouvelle publication à approuver',
+          `${req.user.prenom} ${req.user.nom} a publié un message`,
+          '/admin?tab=posts'
+        );
+      });
+    }
 
     const [posts] = await pool.execute(
       `SELECT p.*, u.nom, u.prenom, u.photo 
@@ -21,74 +50,114 @@ const createPost = async (req, res) => {
 
     res.status(201).json(posts[0]);
   } catch (error) {
-    console.error('Erreur createPost:', error);
+    console.error('❌ Erreur createPost:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
 
-// Récupérer toutes les publications
-const getPosts = async (req, res) => {
+// Récupérer les publications approuvées (feed public) - OPTIMISÉ
+const getApprovedPosts = async (req, res) => {
   try {
     const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.photo,
-        (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
-        (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
+      `SELECT p.id, p.content, p.createdAt,
+              u.id as userId, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion,
+              (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
+              (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
        FROM posts p
        JOIN users u ON p.userId = u.id
-       ORDER BY p.createdAt DESC`
+       WHERE p.isApproved = 1
+       ORDER BY p.createdAt DESC
+       LIMIT 50`, // Limite pour la vitesse
+      []
     );
     res.json(posts);
   } catch (error) {
-    console.error('Erreur getPosts:', error);
+    console.error('❌ Erreur getApprovedPosts:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
 
-// Récupérer les publications d'un utilisateur
+// Récupérer les publications d'un utilisateur (profil public)
 const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
 
     const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.photo,
-        (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
-        (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
+      `SELECT p.id, p.content, p.createdAt,
+              u.id as userId, u.nom, u.prenom, u.photo
        FROM posts p
        JOIN users u ON p.userId = u.id
-       WHERE p.userId = ?
-       ORDER BY p.createdAt DESC`,
+       WHERE p.userId = ? AND p.isApproved = 1
+       ORDER BY p.createdAt DESC
+       LIMIT 20`,
       [userId]
     );
     res.json(posts);
   } catch (error) {
-    console.error('Erreur getUserPosts:', error);
+    console.error('❌ Erreur getUserPosts:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
 
-// Mettre à jour une publication
-const updatePost = async (req, res) => {
+// Approuver une publication (admin seulement)
+const approvePost = async (req, res) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
-
-    const [result] = await pool.execute(
-      'UPDATE posts SET content = ?, edited = true, editedAt = NOW() WHERE id = ? AND userId = ?',
-      [content, id, req.user.id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Publication non trouvée' });
-    }
-
-    const [posts] = await pool.execute(
-      'SELECT * FROM posts WHERE id = ?',
+    
+    await pool.execute(
+      'UPDATE posts SET isApproved = 1 WHERE id = ?',
       [id]
     );
-
-    res.json(posts[0]);
+    
+    // Récupérer les infos du post
+    const [posts] = await pool.execute(
+      `SELECT p.*, u.nom, u.prenom, u.email
+       FROM posts p
+       JOIN users u ON p.userId = u.id
+       WHERE p.id = ?`,
+      [id]
+    );
+    
+    const post = posts[0];
+    
+    // Notifier l'utilisateur
+    notificationController.createNotification(
+      post.userId,
+      'post_approved',
+      req.user.id,
+      id,
+      'Votre publication a été approuvée'
+    );
+    
+    // Notification push
+    notificationController.sendPushNotification(
+      post.userId,
+      '✅ Publication approuvée',
+      'Votre message est maintenant visible sur le feed',
+      '/profile'
+    );
+    
+    res.json({ message: 'Publication approuvée' });
   } catch (error) {
-    console.error('Erreur updatePost:', error);
+    console.error('❌ Erreur approvePost:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Récupérer les publications en attente (admin)
+const getPendingPosts = async (req, res) => {
+  try {
+    const [posts] = await pool.execute(
+      `SELECT p.*, u.nom, u.prenom, u.email, u.photo
+       FROM posts p
+       JOIN users u ON p.userId = u.id
+       WHERE p.isApproved = 0
+       ORDER BY p.createdAt DESC`,
+      []
+    );
+    res.json(posts);
+  } catch (error) {
+    console.error('❌ Erreur getPendingPosts:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -109,15 +178,16 @@ const deletePost = async (req, res) => {
 
     res.json({ message: 'Publication supprimée' });
   } catch (error) {
-    console.error('Erreur deletePost:', error);
+    console.error('❌ Erreur deletePost:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
 
 module.exports = {
   createPost,
-  getPosts,
+  getApprovedPosts,
   getUserPosts,
-  updatePost,
+  approvePost,
+  getPendingPosts,
   deletePost
 };
