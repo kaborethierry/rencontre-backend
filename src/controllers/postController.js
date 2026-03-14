@@ -22,6 +22,7 @@ const createPost = async (req, res) => {
       );
       
       for (const admin of admins) {
+        // Créer une notification dans la base
         await notificationController.createNotification(
           admin.id,
           'post_approval',
@@ -30,7 +31,7 @@ const createPost = async (req, res) => {
           `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`
         );
         
-        // Notification push
+        // Envoyer une notification push
         await notificationController.sendPushNotification(
           admin.id,
           '📝 Nouvelle publication à approuver',
@@ -55,13 +56,12 @@ const createPost = async (req, res) => {
   }
 };
 
-// Récupérer toutes les publications (feed public) - ULTRA RAPIDE
+// Récupérer UNIQUEMENT les publications approuvées (feed public)
 const getPosts = async (req, res) => {
   try {
-    // Une seule requête SQL optimisée avec toutes les données
     const [posts] = await pool.execute(
       `SELECT 
-        p.id, p.content, p.createdAt, p.isApproved,
+        p.id, p.content, p.createdAt,
         u.id as userId, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion,
         (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
         (SELECT JSON_ARRAYAGG(userId) FROM likes WHERE postId = p.id) as likesUsers,
@@ -80,7 +80,7 @@ const getPosts = async (req, res) => {
          WHERE c.postId = p.id) as comments
        FROM posts p
        JOIN users u ON p.userId = u.id
-       WHERE p.isApproved = 1
+       WHERE p.isApproved = 1  -- ← SEULEMENT LES POSTS APPROUVÉS
        ORDER BY p.createdAt DESC`
     );
 
@@ -115,6 +115,24 @@ const getUserPosts = async (req, res) => {
     res.json(posts);
   } catch (error) {
     console.error('❌ Erreur getUserPosts:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Récupérer les publications en attente (admin seulement)
+const getPendingPosts = async (req, res) => {
+  try {
+    const [posts] = await pool.execute(
+      `SELECT p.*, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion
+       FROM posts p
+       JOIN users u ON p.userId = u.id
+       WHERE p.isApproved = 0
+       ORDER BY p.createdAt DESC`,
+      []
+    );
+    res.json(posts);
+  } catch (error) {
+    console.error('❌ Erreur getPendingPosts:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
@@ -164,24 +182,6 @@ const approvePost = async (req, res) => {
   }
 };
 
-// Récupérer les publications en attente (admin)
-const getPendingPosts = async (req, res) => {
-  try {
-    const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.photo
-       FROM posts p
-       JOIN users u ON p.userId = u.id
-       WHERE p.isApproved = 0
-       ORDER BY p.createdAt DESC`,
-      []
-    );
-    res.json(posts);
-  } catch (error) {
-    console.error('❌ Erreur getPendingPosts:', error);
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-};
-
 // Supprimer une publication
 const deletePost = async (req, res) => {
   try {
@@ -207,7 +207,7 @@ module.exports = {
   createPost,
   getPosts,
   getUserPosts,
-  approvePost,
   getPendingPosts,
+  approvePost,
   deletePost
 };

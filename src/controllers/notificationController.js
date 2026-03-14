@@ -11,7 +11,7 @@ webpush.setVapidDetails(
   privateVapidKey
 );
 
-// Stockage des abonnements (en mémoire - à remplacer par une table en production)
+// Stockage des abonnements
 let subscriptions = {};
 
 // Créer une notification
