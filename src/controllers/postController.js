@@ -15,6 +15,15 @@ const createPost = async (req, res) => {
       [req.user.id, content, isApproved]
     );
 
+    // Récupérer le post créé
+    const [posts] = await pool.execute(
+      `SELECT p.*, u.nom, u.prenom, u.photo 
+       FROM posts p
+       JOIN users u ON p.userId = u.id
+       WHERE p.id = ?`,
+      [result.insertId]
+    );
+
     // Si ce n'est pas un admin, notifier les admins
     if (!isApproved) {
       const [admins] = await pool.execute(
@@ -40,14 +49,6 @@ const createPost = async (req, res) => {
       });
     }
 
-    const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.photo 
-       FROM posts p
-       JOIN users u ON p.userId = u.id
-       WHERE p.id = ?`,
-      [result.insertId]
-    );
-
     res.status(201).json(posts[0]);
   } catch (error) {
     console.error('❌ Erreur createPost:', error);
@@ -55,29 +56,50 @@ const createPost = async (req, res) => {
   }
 };
 
-// Récupérer les publications approuvées (feed public) - OPTIMISÉ
-const getApprovedPosts = async (req, res) => {
+// Récupérer toutes les publications (feed public) - OPTIMISÉ
+const getPosts = async (req, res) => {
   try {
+    // Une seule requête SQL optimisée avec toutes les données
     const [posts] = await pool.execute(
-      `SELECT p.id, p.content, p.createdAt,
-              u.id as userId, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion,
-              (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
-              (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
+      `SELECT 
+        p.id, p.content, p.createdAt, p.isApproved,
+        u.id as userId, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion,
+        (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
+        (SELECT JSON_ARRAYAGG(userId) FROM likes WHERE postId = p.id) as likesUsers,
+        (SELECT JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'id', c.id,
+            'content', c.content,
+            'createdAt', c.createdAt,
+            'userId', cu.id,
+            'nom', cu.nom,
+            'prenom', cu.prenom,
+            'photo', cu.photo
+          )
+         ) FROM comments c 
+         JOIN users cu ON c.userId = cu.id 
+         WHERE c.postId = p.id) as comments
        FROM posts p
        JOIN users u ON p.userId = u.id
        WHERE p.isApproved = 1
-       ORDER BY p.createdAt DESC
-       LIMIT 50`, // Limite pour la vitesse
-      []
+       ORDER BY p.createdAt DESC`
     );
-    res.json(posts);
+
+    // Parsing JSON pour les commentaires
+    const formattedPosts = posts.map(post => ({
+      ...post,
+      likesUsers: post.likesUsers ? JSON.parse(post.likesUsers) : [],
+      comments: post.comments ? JSON.parse(post.comments) : []
+    }));
+
+    res.json(formattedPosts);
   } catch (error) {
-    console.error('❌ Erreur getApprovedPosts:', error);
+    console.error('❌ Erreur getPosts:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
 
-// Récupérer les publications d'un utilisateur (profil public)
+// Récupérer les publications d'un utilisateur
 const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -88,8 +110,7 @@ const getUserPosts = async (req, res) => {
        FROM posts p
        JOIN users u ON p.userId = u.id
        WHERE p.userId = ? AND p.isApproved = 1
-       ORDER BY p.createdAt DESC
-       LIMIT 20`,
+       ORDER BY p.createdAt DESC`,
       [userId]
     );
     res.json(posts);
@@ -148,7 +169,7 @@ const approvePost = async (req, res) => {
 const getPendingPosts = async (req, res) => {
   try {
     const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.email, u.photo
+      `SELECT p.*, u.nom, u.prenom, u.photo
        FROM posts p
        JOIN users u ON p.userId = u.id
        WHERE p.isApproved = 0
@@ -185,7 +206,7 @@ const deletePost = async (req, res) => {
 
 module.exports = {
   createPost,
-  getApprovedPosts,
+  getPosts,
   getUserPosts,
   approvePost,
   getPendingPosts,

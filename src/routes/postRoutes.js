@@ -1,13 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
-const { protect } = require('../middlewares/authMiddleware');
+const { protect, admin } = require('../middlewares/authMiddleware');
 
-// Routes protégées (nécessitent authentification)
-router.post('/', protect, postController.createPost);
+// Routes publiques
 router.get('/', postController.getPosts);
 router.get('/user/:userId', postController.getUserPosts);
-router.put('/:id', protect, postController.updatePost);
+
+// Routes protégées
+router.post('/', protect, postController.createPost);
 router.delete('/:id', protect, postController.deletePost);
+
+// Routes admin
+router.get('/pending', protect, admin, postController.getPendingPosts);
+router.put('/:id/approve', protect, admin, postController.approvePost);
 
 module.exports = router;
