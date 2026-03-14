@@ -15,23 +15,14 @@ const createPost = async (req, res) => {
       [req.user.id, content, isApproved]
     );
 
-    // Récupérer le post créé
-    const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.photo 
-       FROM posts p
-       JOIN users u ON p.userId = u.id
-       WHERE p.id = ?`,
-      [result.insertId]
-    );
-
     // Si ce n'est pas un admin, notifier les admins
     if (!isApproved) {
       const [admins] = await pool.execute(
         'SELECT id FROM users WHERE role = "admin"'
       );
       
-      admins.forEach(admin => {
-        notificationController.createNotification(
+      for (const admin of admins) {
+        await notificationController.createNotification(
           admin.id,
           'post_approval',
           req.user.id,
@@ -40,14 +31,22 @@ const createPost = async (req, res) => {
         );
         
         // Notification push
-        notificationController.sendPushNotification(
+        await notificationController.sendPushNotification(
           admin.id,
           '📝 Nouvelle publication à approuver',
           `${req.user.prenom} ${req.user.nom} a publié un message`,
           '/admin?tab=posts'
         );
-      });
+      }
     }
+
+    const [posts] = await pool.execute(
+      `SELECT p.*, u.nom, u.prenom, u.photo 
+       FROM posts p
+       JOIN users u ON p.userId = u.id
+       WHERE p.id = ?`,
+      [result.insertId]
+    );
 
     res.status(201).json(posts[0]);
   } catch (error) {
@@ -56,7 +55,7 @@ const createPost = async (req, res) => {
   }
 };
 
-// Récupérer toutes les publications (feed public) - OPTIMISÉ
+// Récupérer toutes les publications (feed public) - ULTRA RAPIDE
 const getPosts = async (req, res) => {
   try {
     // Une seule requête SQL optimisée avec toutes les données
@@ -99,7 +98,7 @@ const getPosts = async (req, res) => {
   }
 };
 
-// Récupérer les publications d'un utilisateur
+// Récupérer les publications d'un utilisateur (profil public)
 const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -142,7 +141,7 @@ const approvePost = async (req, res) => {
     const post = posts[0];
     
     // Notifier l'utilisateur
-    notificationController.createNotification(
+    await notificationController.createNotification(
       post.userId,
       'post_approved',
       req.user.id,
@@ -151,7 +150,7 @@ const approvePost = async (req, res) => {
     );
     
     // Notification push
-    notificationController.sendPushNotification(
+    await notificationController.sendPushNotification(
       post.userId,
       '✅ Publication approuvée',
       'Votre message est maintenant visible sur le feed',
