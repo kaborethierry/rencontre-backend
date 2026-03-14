@@ -17,7 +17,7 @@ const likeRoutes = require('./routes/likeRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const adminRoutes = require('./routes/adminRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
+const notificationRoutes = require('./routes/notificationRoutes'); // NOUVEAU
 
 const app = express();
 const httpServer = createServer(app);
@@ -55,46 +55,37 @@ if (isDev) {
 } else {
   limiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
-    max: 60,
+    max: 60, // 60 requêtes par minute (1 par seconde en moyenne)
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => {
-      return req.headers['x-forwarded-for']?.split(',')[0] || req.ip || req.connection.remoteAddress;
+      return req.headers['x-forwarded-for']?.split(',')[0] || 
+             req.ip || 
+             req.connection.remoteAddress;
     },
     skip: (req) => {
       return req.path === '/api/health' || req.path.startsWith('/uploads');
     },
     handler: (req, res) => {
-      res.status(429).json({ message: 'Trop de requêtes. Veuillez patienter.' });
+      res.status(429).json({ 
+        message: 'Trop de requêtes. Veuillez patienter quelques instants.'
+      });
     }
   });
 }
 
+// ✅ CONFIGURATION HELMET AVEC HSTS
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   hsts: {
-    maxAge: 31536000,
+    maxAge: 31536000,      // 1 an en secondes
     includeSubDomains: true,
     preload: true
   }
 }));
 
-// ✅ CONFIGURATION CORS AMÉLIORÉE
-const allowedOrigins = [
-  'https://www.rencontreauthentique.org',
-  'https://rencontreauthentique.org',
-  'http://localhost:3000'
-];
-
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('❌ Origine bloquée par CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -121,7 +112,7 @@ app.use('/api/likes', likeRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes); // NOUVEAU
 
 // Route de test
 app.get('/api/health', (req, res) => {

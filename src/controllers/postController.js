@@ -15,6 +15,15 @@ const createPost = async (req, res) => {
       [req.user.id, content, isApproved]
     );
 
+    // Récupérer le post créé
+    const [posts] = await pool.execute(
+      `SELECT p.*, u.nom, u.prenom, u.photo 
+       FROM posts p
+       JOIN users u ON p.userId = u.id
+       WHERE p.id = ?`,
+      [result.insertId]
+    );
+
     // Si ce n'est pas un admin, notifier les admins
     if (!isApproved) {
       const [admins] = await pool.execute(
@@ -41,14 +50,6 @@ const createPost = async (req, res) => {
       }
     }
 
-    const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.photo 
-       FROM posts p
-       JOIN users u ON p.userId = u.id
-       WHERE p.id = ?`,
-      [result.insertId]
-    );
-
     res.status(201).json(posts[0]);
   } catch (error) {
     console.error('❌ Erreur createPost:', error);
@@ -64,31 +65,18 @@ const getPosts = async (req, res) => {
         p.id, p.content, p.createdAt,
         u.id as userId, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion,
         (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
-        (SELECT JSON_ARRAYAGG(userId) FROM likes WHERE postId = p.id) as likesUsers,
-        (SELECT JSON_ARRAYAGG(
-          JSON_OBJECT(
-            'id', c.id,
-            'content', c.content,
-            'createdAt', c.createdAt,
-            'userId', cu.id,
-            'nom', cu.nom,
-            'prenom', cu.prenom,
-            'photo', cu.photo
-          )
-         ) FROM comments c 
-         JOIN users cu ON c.userId = cu.id 
-         WHERE c.postId = p.id) as comments
+        (SELECT JSON_ARRAYAGG(userId) FROM likes WHERE postId = p.id) as likesUsers
        FROM posts p
        JOIN users u ON p.userId = u.id
        WHERE p.isApproved = 1
        ORDER BY p.createdAt DESC`
     );
 
-    // Parsing JSON pour les commentaires et likes
+    // Parsing JSON pour les likes
     const formattedPosts = posts.map(post => ({
       ...post,
       likesUsers: post.likesUsers ? JSON.parse(post.likesUsers) : [],
-      comments: post.comments ? JSON.parse(post.comments) : []
+      comments: [] // Les commentaires seront chargés séparément
     }));
 
     res.json(formattedPosts);
@@ -149,7 +137,7 @@ const approvePost = async (req, res) => {
     
     // Récupérer les infos du post
     const [posts] = await pool.execute(
-      `SELECT p.*, u.nom, u.prenom, u.email
+      `SELECT p.*, u.nom, u.prenom, u.email, u.id as userId
        FROM posts p
        JOIN users u ON p.userId = u.id
        WHERE p.id = ?`,
