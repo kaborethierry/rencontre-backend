@@ -4,6 +4,20 @@ const adminController = require('../controllers/adminController');
 const postController = require('../controllers/postController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 
+// MIDDLEWARE DE LOG ULTIME - À METTRE TOUT EN PREMIER
+router.use((req, res, next) => {
+  console.log('\n🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴');
+  console.log('🔥 NOUVELLE REQUÊTE ADMIN');
+  console.log('📍 URL:', req.originalUrl);
+  console.log('📝 Méthode:', req.method);
+  console.log('🔑 Headers Authorization:', req.headers.authorization ? 'PRÉSENT' : 'ABSENT');
+  if (req.headers.authorization) {
+    console.log('🔑 Token (preview):', req.headers.authorization.substring(0, 30) + '...');
+  }
+  console.log('🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴\n');
+  next();
+});
+
 // Toutes les routes admin nécessitent authentification ET rôle admin
 router.use(protect);
 router.use(admin);
