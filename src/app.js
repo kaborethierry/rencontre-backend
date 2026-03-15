@@ -17,7 +17,7 @@ const likeRoutes = require('./routes/likeRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const adminRoutes = require('./routes/adminRoutes');
-const notificationRoutes = require('./routes/notificationRoutes'); // NOUVEAU
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const httpServer = createServer(app);
@@ -84,11 +84,12 @@ app.use(helmet({
   }
 }));
 
+// ✅ CONFIGURATION CORS CORRIGÉE - avec pragma et cache-control
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'pragma', 'cache-control']
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -112,7 +113,7 @@ app.use('/api/likes', likeRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/notifications', notificationRoutes); // NOUVEAU
+app.use('/api/notifications', notificationRoutes);
 
 // Route de test
 app.get('/api/health', (req, res) => {
