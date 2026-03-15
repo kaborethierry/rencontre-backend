@@ -6,8 +6,11 @@ const createPost = async (req, res) => {
   try {
     const { content } = req.body;
     
-    // Par défaut, les posts sont en attente d'approbation
+    // ✅ CORRECTION: Par défaut, les posts sont en attente (isApproved = 0)
+    // Seuls les admins ont leurs posts directement approuvés
     const isApproved = req.user.role === 'admin' ? 1 : 0;
+    
+    console.log(`Création d'un post pour user ${req.user.id}, approuvé: ${isApproved}`);
     
     const [result] = await pool.execute(
       'INSERT INTO posts (userId, content, isApproved) VALUES (?, ?, ?)',
@@ -23,31 +26,39 @@ const createPost = async (req, res) => {
       [result.insertId]
     );
 
-    // Si ce n'est pas un admin, notifier les admins
+    const newPost = posts[0];
+
+    // ✅ CORRECTION: Si ce n'est pas un admin, notifier les admins
     if (!isApproved) {
+      console.log("Post en attente, notification aux admins");
+      
       const [admins] = await pool.execute(
         'SELECT id FROM users WHERE role = "admin"'
       );
       
       for (const admin of admins) {
-        await notificationController.createNotification(
-          admin.id,
-          'post_approval',
-          req.user.id,
-          result.insertId,
-          `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`
-        );
-        
-        await notificationController.sendPushNotification(
-          admin.id,
-          '📝 Nouvelle publication à approuver',
-          `${req.user.prenom} ${req.user.nom} a publié un message`,
-          '/admin?tab=posts'
-        );
+        try {
+          await notificationController.createNotification(
+            admin.id,
+            'post_approval',
+            req.user.id,
+            result.insertId,
+            `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`
+          );
+          
+          await notificationController.sendPushNotification(
+            admin.id,
+            '📝 Nouvelle publication à approuver',
+            `${req.user.prenom} ${req.user.nom} a publié un message`,
+            '/admin?tab=posts'
+          );
+        } catch (notifError) {
+          console.error("Erreur envoi notification admin:", notifError);
+        }
       }
     }
 
-    res.status(201).json(posts[0]);
+    res.status(201).json(newPost);
   } catch (error) {
     console.error('❌ Erreur createPost:', error);
     res.status(500).json({ message: 'Erreur serveur' });
@@ -59,7 +70,7 @@ const getPosts = async (req, res) => {
   try {
     const [posts] = await pool.execute(
       `SELECT 
-        p.id, p.content, p.createdAt,
+        p.id, p.content, p.createdAt, p.isApproved,
         u.id as userId, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion,
         (SELECT COUNT(*) FROM likes WHERE postId = p.id) as likesCount,
         (SELECT JSON_ARRAYAGG(userId) FROM likes WHERE postId = p.id) as likesUsers
@@ -82,11 +93,13 @@ const getPosts = async (req, res) => {
   }
 };
 
-// Récupérer les publications d'un utilisateur (avec statut)
+// ✅ CORRECTION: Récupérer les publications d'un utilisateur (AVEC LEUR STATUT)
 const getUserPosts = async (req, res) => {
   try {
     const { userId } = req.params;
     const currentUserId = req.user?.id;
+
+    console.log(`Chargement des posts pour l'utilisateur ${userId}`);
 
     const [posts] = await pool.execute(
       `SELECT p.id, p.content, p.createdAt, p.isApproved,
@@ -98,13 +111,12 @@ const getUserPosts = async (req, res) => {
       [userId]
     );
     
-    // Ajouter le statut pour chaque post
+    console.log(`${posts.length} posts trouvés pour l'utilisateur ${userId}`);
+    
+    // ✅ CORRECTION: Ajouter le statut explicite pour chaque post
     const postsWithStatus = posts.map(post => ({
       ...post,
-      status: post.isApproved ? 'approved' : 'pending',
-      message: post.isApproved 
-        ? '✅ Publication approuvée et visible par tous' 
-        : '⏳ En attente d\'approbation par l\'administrateur'
+      status: post.isApproved === 1 ? 'approved' : 'pending'
     }));
 
     res.json(postsWithStatus);
@@ -117,14 +129,17 @@ const getUserPosts = async (req, res) => {
 // Récupérer les publications en attente (admin seulement)
 const getPendingPosts = async (req, res) => {
   try {
+    console.log("Récupération des posts en attente...");
+    
     const [posts] = await pool.execute(
       `SELECT p.*, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion
        FROM posts p
        JOIN users u ON p.userId = u.id
        WHERE p.isApproved = 0
-       ORDER BY p.createdAt DESC`,
-      []
+       ORDER BY p.createdAt DESC`
     );
+    
+    console.log(`${posts.length} posts en attente trouvés`);
     res.json(posts);
   } catch (error) {
     console.error('❌ Erreur getPendingPosts:', error);
@@ -137,11 +152,15 @@ const approvePost = async (req, res) => {
   try {
     const { id } = req.params;
     
+    console.log(`Approbation du post ${id}`);
+    
+    // ✅ CORRECTION: Mettre isApproved à 1
     await pool.execute(
       'UPDATE posts SET isApproved = 1 WHERE id = ?',
       [id]
     );
     
+    // Récupérer les infos du post pour notification
     const [posts] = await pool.execute(
       `SELECT p.*, u.nom, u.prenom, u.email, u.id as userId
        FROM posts p
@@ -150,22 +169,29 @@ const approvePost = async (req, res) => {
       [id]
     );
     
-    const post = posts[0];
-    
-    await notificationController.createNotification(
-      post.userId,
-      'post_approved',
-      req.user.id,
-      id,
-      'Votre publication a été approuvée'
-    );
-    
-    await notificationController.sendPushNotification(
-      post.userId,
-      '✅ Publication approuvée',
-      'Votre message est maintenant visible sur le feed',
-      '/profile'
-    );
+    if (posts.length > 0) {
+      const post = posts[0];
+      
+      // Notifier l'utilisateur
+      try {
+        await notificationController.createNotification(
+          post.userId,
+          'post_approved',
+          req.user.id,
+          id,
+          'Votre publication a été approuvée'
+        );
+        
+        await notificationController.sendPushNotification(
+          post.userId,
+          '✅ Publication approuvée',
+          'Votre message est maintenant visible sur le feed',
+          '/profile'
+        );
+      } catch (notifError) {
+        console.error("Erreur envoi notification utilisateur:", notifError);
+      }
+    }
     
     res.json({ message: 'Publication approuvée' });
   } catch (error) {

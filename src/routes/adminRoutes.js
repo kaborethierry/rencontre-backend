@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
-const postController = require('../controllers/postController'); // IMPORTANT
+const postController = require('../controllers/postController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 
 // Toutes les routes admin nécessitent authentification ET rôle admin
@@ -17,8 +17,8 @@ router.delete('/users/:id', adminController.deleteUser);
 
 // Gestion des posts
 router.get('/posts', adminController.getAllPosts);
-router.get('/posts/pending', postController.getPendingPosts); // Route pour posts en attente
-router.put('/posts/:id/approve', postController.approvePost); // Route pour approuver
+router.get('/posts/pending', postController.getPendingPosts); // ✅ Route pour posts en attente
+router.put('/posts/:id/approve', postController.approvePost); // ✅ Route pour approuver
 router.delete('/posts/:id', adminController.deletePost);
 
 // Gestion des signalements
