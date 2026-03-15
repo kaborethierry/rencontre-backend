@@ -98,7 +98,7 @@ module.exports = (io) => {
           [socket.user.id]
         );
 
-        // ✅ NOTIFICATION PUSH - Envoyer via le contrôleur de notifications
+        // ✅ NOTIFICATION PUSH RÉELLE - Envoyer via le contrôleur
         try {
           await notificationController.sendPushNotification(
             parseInt(receiverId),
