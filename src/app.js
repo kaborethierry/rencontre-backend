@@ -84,12 +84,19 @@ app.use(helmet({
   }
 }));
 
-// ✅ CONFIGURATION CORS CORRIGÉE - avec pragma et cache-control
+// ✅ CONFIGURATION CORS ULTIME - avec TOUS les headers
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'pragma', 'cache-control']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'pragma', 
+    'cache-control', 
+    'expires',
+    'x-requested-with'
+  ]
 }));
 
 app.use(express.json({ limit: '10mb' }));
