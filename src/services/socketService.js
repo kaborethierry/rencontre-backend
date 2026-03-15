@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db');
+const notificationController = require('../controllers/notificationController');
 
 module.exports = (io) => {
   // Middleware d'authentification socket
@@ -82,7 +83,7 @@ module.exports = (io) => {
         const message = messages[0];
         console.log('✅ Message sauvegardé ID:', message.id);
 
-        // Émettre au destinataire
+        // Émettre au destinataire (socket en temps réel)
         io.to(`user:${receiverId}`).emit('receive-message', message);
 
         // Émettre à l'expéditeur (confirmation)
@@ -97,7 +98,22 @@ module.exports = (io) => {
           [socket.user.id]
         );
 
-        // Envoyer une notification push
+        // ✅ NOTIFICATION PUSH - Envoyer via le contrôleur de notifications
+        try {
+          await notificationController.sendPushNotification(
+            parseInt(receiverId),
+            'new_message',
+            type === 'image' ? '📷 Photo' : content,
+            socket.user.id,
+            null,
+            `/chat?userId=${socket.user.id}`
+          );
+          console.log(`✅ Notification push envoyée à l'utilisateur ${receiverId}`);
+        } catch (pushError) {
+          console.error('❌ Erreur envoi notification push:', pushError);
+        }
+
+        // ✅ Notification socket (pour les utilisateurs connectés)
         io.to(`user:${receiverId}`).emit('new-notification', {
           type: 'message',
           title: `📩 Nouveau message de ${senderInfo[0].prenom}`,

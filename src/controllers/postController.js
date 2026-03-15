@@ -58,22 +58,27 @@ const createPost = async (req, res) => {
       
       for (const admin of admins) {
         try {
+          // ✅ Notification en base de données
           await notificationController.createNotification(
             admin.id,
             'post_approval',
             userId,
             result.insertId,
-            `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`
+            `Nouvelle publication en attente de ${req.user.prenom} ${req.user.nom}`,
+            '/admin?tab=posts'
           );
           
+          // ✅ Notification push temps réel (même si admin hors ligne)
           await notificationController.sendPushNotification(
             admin.id,
-            '📝 Nouvelle publication à approuver',
+            'post_approval',
             `${req.user.prenom} ${req.user.nom} a publié son premier message`,
+            userId,
+            result.insertId,
             '/admin?tab=posts'
           );
         } catch (notifError) {
-          console.error("Erreur envoi notification admin:", notifError);
+          console.error("❌ Erreur envoi notification admin:", notifError);
         }
       }
     } else {
@@ -206,17 +211,20 @@ const approvePost = async (req, res) => {
           'post_approved',
           req.user.id,
           id,
-          'Votre première publication a été approuvée ! Désormais, vos futures publications seront automatiquement publiées.'
+          'Votre première publication a été approuvée ! Désormais, vos futures publications seront automatiquement publiées.',
+          '/profile'
         );
         
         await notificationController.sendPushNotification(
           userId,
-          '✅ Première publication approuvée',
-          'Votre message est maintenant visible. Vos prochaines publications seront automatiques !',
+          'post_approved',
+          '✅ Votre publication a été approuvée ! Vos prochains messages seront automatiques.',
+          req.user.id,
+          id,
           '/profile'
         );
       } catch (notifError) {
-        console.error("Erreur envoi notification utilisateur:", notifError);
+        console.error("❌ Erreur envoi notification utilisateur:", notifError);
       }
     }
     
