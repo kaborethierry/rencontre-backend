@@ -4,9 +4,12 @@ const adminController = require('../controllers/adminController');
 const postController = require('../controllers/postController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 
-// Appliquer les middlewares à toutes les routes
-router.use(protect);
-router.use(admin);
+// Toutes les routes admin nécessitent authentification ET rôle admin
+router.use(protect, admin);
+
+// ✅ METTRE LES ROUTES SPÉCIFIQUES AVANT LES ROUTES GÉNÉRIQUES
+router.get('/posts/pending', postController.getPendingPosts); // ← À METTRE EN PREMIER
+router.put('/posts/:id/approve', postController.approvePost);
 
 // Tableau de bord
 router.get('/dashboard', adminController.getDashboardStats);
@@ -16,19 +19,8 @@ router.get('/users', adminController.getAllUsers);
 router.put('/users/:id/toggle', adminController.toggleUserStatus);
 router.delete('/users/:id', adminController.deleteUser);
 
-// Gestion des posts - avec log explicite
-router.get('/posts', (req, res, next) => {
-  console.log('📌 Route /admin/posts appelée');
-  next();
-}, adminController.getAllPosts);
-
-router.get('/posts/pending', (req, res, next) => {
-  console.log('📌 Route /admin/posts/pending appelée');
-  console.log('👤 User:', req.user?.id, req.user?.role);
-  next();
-}, postController.getPendingPosts);
-
-router.put('/posts/:id/approve', postController.approvePost);
+// Gestion des posts (route générique)
+router.get('/posts', adminController.getAllPosts);
 router.delete('/posts/:id', adminController.deletePost);
 
 // Gestion des signalements
