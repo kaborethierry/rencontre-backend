@@ -25,7 +25,7 @@ const protect = async (req, res, next) => {
       req.user = users[0];
       next();
     } catch (error) {
-      console.error('Erreur d\'authentification:', error);
+      console.error('❌ Erreur d\'authentification:', error.message);
       return res.status(401).json({ message: 'Non autorisé, token invalide' });
     }
   }
@@ -36,9 +36,27 @@ const protect = async (req, res, next) => {
 };
 
 const admin = (req, res, next) => {
+  console.log('='.repeat(50));
+  console.log('🔐 VÉRIFICATION ADMIN');
+  console.log('📍 URL:', req.originalUrl);
+  console.log('📝 Méthode:', req.method);
+  console.log('👤 User présent dans req.user:', req.user ? 'OUI' : 'NON');
+  
+  if (req.user) {
+    console.log('👤 ID:', req.user.id);
+    console.log('👤 Rôle:', req.user.role);
+    console.log('👤 Email:', req.user.email);
+  } else {
+    console.log('⚠️ req.user est undefined - le middleware protect a peut-être échoué');
+  }
+  
+  console.log('='.repeat(50));
+
   if (req.user && req.user.role === 'admin') {
+    console.log('✅ ACCÈS ADMIN AUTORISÉ');
     next();
   } else {
+    console.log('❌ ACCÈS ADMIN REFUSÉ');
     res.status(403).json({ message: 'Accès interdit - Admin seulement' });
   }
 };
