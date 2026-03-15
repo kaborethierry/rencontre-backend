@@ -146,7 +146,7 @@ const getUserPosts = async (req, res) => {
   }
 };
 
-// Récupérer les publications en attente (admin seulement)
+// ✅ Récupérer les publications en attente (admin seulement)
 const getPendingPosts = async (req, res) => {
   try {
     console.log("Récupération des posts en attente...");
@@ -263,7 +263,7 @@ module.exports = {
   createPost,
   getPosts,
   getUserPosts,
-  getPendingPosts,
+  getPendingPosts, // ✅ Cette fonction existe bien
   approvePost,
   deletePost
 };
