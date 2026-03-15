@@ -7,6 +7,9 @@ const { protect, admin } = require('../middlewares/authMiddleware');
 // Toutes les routes admin nécessitent authentification ET rôle admin
 router.use(protect, admin);
 
+// ✅ METTRE LA ROUTE PENDING EN PREMIER
+router.get('/posts/pending', postController.getPendingPosts);
+
 // Tableau de bord
 router.get('/dashboard', adminController.getDashboardStats);
 
@@ -17,8 +20,7 @@ router.delete('/users/:id', adminController.deleteUser);
 
 // Gestion des posts
 router.get('/posts', adminController.getAllPosts);
-router.get('/posts/pending', postController.getPendingPosts); // ✅ Route pour posts en attente
-router.put('/posts/:id/approve', postController.approvePost); // ✅ Route pour approuver
+router.put('/posts/:id/approve', postController.approvePost);
 router.delete('/posts/:id', adminController.deletePost);
 
 // Gestion des signalements

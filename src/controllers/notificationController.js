@@ -16,15 +16,19 @@ const createNotification = async (userId, type, senderId, postId, content, url =
   try {
     console.log(`📢 Création notification pour user ${userId}: ${type}`);
     
+    // ✅ S'assurer que le type est valide
+    const validTypes = ['like', 'comment', 'message', 'friend_request', 'post_approval', 'post_approved', 'new_message'];
+    const notificationType = validTypes.includes(type) ? type : 'message';
+    
     // Sauvegarder en base
     const [result] = await pool.execute(
       `INSERT INTO notifications (userId, type, senderId, postId, content, createdAt) 
        VALUES (?, ?, ?, ?, ?, NOW())`,
-      [userId, type, senderId, postId, content]
+      [userId, notificationType, senderId, postId, content]
     );
 
     // Envoyer notification push immédiatement
-    await sendPushNotification(userId, type, content, senderId, postId, url);
+    await sendPushNotification(userId, notificationType, content, senderId, postId, url);
 
     return result.insertId;
   } catch (error) {
@@ -70,9 +74,6 @@ const sendPushNotification = async (userId, type, content, senderId, postId, url
         break;
       case 'comment':
         title = `💬 ${senderName} a commenté votre publication`;
-        break;
-      case 'friend_request':
-        title = `👋 ${senderName} vous a envoyé une demande d'amitié`;
         break;
       default:
         title = '🔔 Rencontre Authentique';
