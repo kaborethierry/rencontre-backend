@@ -5,11 +5,14 @@ const postController = require('../controllers/postController');
 const { protect, admin } = require('../middlewares/authMiddleware');
 
 // Toutes les routes admin nécessitent authentification ET rôle admin
-router.use(protect, admin);
+router.use(protect);
+router.use(admin);
 
-// ✅ METTRE LES ROUTES SPÉCIFIQUES AVANT LES ROUTES GÉNÉRIQUES
-router.get('/posts/pending', postController.getPendingPosts); // ← À METTRE EN PREMIER
+// ✅ GESTION DES POSTS - Les routes spécifiques AVANT les routes génériques
+router.get('/posts/pending', postController.getPendingPosts);
 router.put('/posts/:id/approve', postController.approvePost);
+router.get('/posts', adminController.getAllPosts);
+router.delete('/posts/:id', adminController.deletePost);
 
 // Tableau de bord
 router.get('/dashboard', adminController.getDashboardStats);
@@ -18,10 +21,6 @@ router.get('/dashboard', adminController.getDashboardStats);
 router.get('/users', adminController.getAllUsers);
 router.put('/users/:id/toggle', adminController.toggleUserStatus);
 router.delete('/users/:id', adminController.deleteUser);
-
-// Gestion des posts (route générique)
-router.get('/posts', adminController.getAllPosts);
-router.delete('/posts/:id', adminController.deletePost);
 
 // Gestion des signalements
 router.get('/reports', adminController.getReports);
