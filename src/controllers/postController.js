@@ -146,10 +146,30 @@ const getUserPosts = async (req, res) => {
   }
 };
 
-// ✅ Récupérer les publications en attente (admin seulement)
+// ✅ Récupérer les publications en attente (admin seulement) - AVEC LOGS DE DIAGNOSTIC
 const getPendingPosts = async (req, res) => {
   try {
-    console.log("Récupération des posts en attente...");
+    console.log("=".repeat(50));
+    console.log("📋 getPendingPosts appelé");
+    console.log("🔑 User ID:", req.user?.id);
+    console.log("👤 User role:", req.user?.role);
+    console.log("🔗 URL:", req.originalUrl);
+    console.log("📝 Headers:", req.headers.authorization ? "Token présent" : "Pas de token");
+    console.log("=".repeat(50));
+    
+    // Vérification explicite de l'authentification
+    if (!req.user) {
+      console.log("❌ ERREUR: utilisateur non défini");
+      return res.status(401).json({ message: 'Utilisateur non authentifié' });
+    }
+    
+    // Vérification explicite du rôle admin
+    if (req.user.role !== 'admin') {
+      console.log(`❌ ERREUR: rôle utilisateur = ${req.user.role} - accès refusé`);
+      return res.status(403).json({ message: 'Accès interdit - Admin seulement' });
+    }
+    
+    console.log("✅ Authentification admin validée, recherche des posts en attente...");
     
     const [posts] = await pool.execute(
       `SELECT p.*, u.nom, u.prenom, u.photo, u.age, u.ville, u.religion
@@ -159,7 +179,7 @@ const getPendingPosts = async (req, res) => {
        ORDER BY p.createdAt DESC`
     );
     
-    console.log(`${posts.length} posts en attente trouvés`);
+    console.log(`✅ ${posts.length} posts en attente trouvés`);
     res.json(posts);
   } catch (error) {
     console.error('❌ Erreur getPendingPosts:', error);
@@ -263,7 +283,7 @@ module.exports = {
   createPost,
   getPosts,
   getUserPosts,
-  getPendingPosts, // ✅ Cette fonction existe bien
+  getPendingPosts,
   approvePost,
   deletePost
 };
