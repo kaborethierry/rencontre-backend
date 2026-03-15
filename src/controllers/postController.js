@@ -154,12 +154,15 @@ const getPendingPosts = async (req, res) => {
     console.log("🔑 User ID:", req.user?.id);
     console.log("👤 User role:", req.user?.role);
     console.log("🔗 URL:", req.originalUrl);
-    console.log("📝 Headers:", req.headers.authorization ? "Token présent" : "Pas de token");
+    console.log("📝 Headers Authorization:", req.headers.authorization ? "Présent" : "Absent");
+    if (req.headers.authorization) {
+      console.log("🔑 Token preview:", req.headers.authorization.substring(0, 30) + "...");
+    }
     console.log("=".repeat(50));
     
     // Vérification explicite de l'authentification
     if (!req.user) {
-      console.log("❌ ERREUR: utilisateur non défini");
+      console.log("❌ ERREUR: utilisateur non défini dans req.user");
       return res.status(401).json({ message: 'Utilisateur non authentifié' });
     }
     
