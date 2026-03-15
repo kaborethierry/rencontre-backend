@@ -90,6 +90,9 @@ const sendPushNotification = async (userId, type, content, senderId, postId, url
       actions: type === 'post_approval' ? [
         { action: 'approve', title: '✅ Approuver' },
         { action: 'view', title: '👁️ Voir' }
+      ] : type === 'new_message' ? [
+        { action: 'reply', title: '💬 Répondre' },
+        { action: 'view', title: '👁️ Voir' }
       ] : [
         { action: 'view', title: '👁️ Voir' }
       ]

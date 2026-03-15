@@ -31,7 +31,6 @@ const updateProfile = async (req, res) => {
     
     let photoPath = null;
     if (req.file) {
-      // ✅ CORRECTION: Utiliser l'URL complète du backend
       const baseUrl = process.env.BACKEND_URL || 'https://green-alpaca-449310.hostingersite.com';
       photoPath = `${baseUrl}/uploads/profiles/${req.file.filename}`;
       console.log("📸 Nouvelle photo uploadée:", photoPath);

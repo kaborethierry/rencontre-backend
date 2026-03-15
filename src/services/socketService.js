@@ -2,6 +2,9 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db');
 const notificationController = require('../controllers/notificationController');
 
+// Map pour tracker les messages déjà envoyés
+const sentMessages = new Map();
+
 module.exports = (io) => {
   // Middleware d'authentification socket
   io.use(async (socket, next) => {
@@ -45,20 +48,30 @@ module.exports = (io) => {
           receiverId: data.receiverId,
           type: data.type,
           hasContent: !!data.content,
-          hasImage: !!data.image
+          hasImage: !!data.image,
+          clientId: data.clientId // Identifiant unique côté client
         });
+
+        // ✅ Éviter les doublons avec clientId
+        const messageKey = `${socket.user.id}-${data.receiverId}-${data.clientId || Date.now()}`;
+        if (sentMessages.has(messageKey)) {
+          console.log('⏭️ Message déjà traité, ignoré');
+          return;
+        }
+        sentMessages.set(messageKey, true);
+        setTimeout(() => sentMessages.delete(messageKey), 5000); // Nettoyer après 5s
         
-        const { receiverId, content, type = 'text', image } = data;
+        const { receiverId, content, type = 'text', image, clientId } = data;
         
         if (!receiverId) {
           console.error('❌ receiverId manquant');
-          socket.emit('message-error', { error: 'Destinataire non spécifié' });
+          socket.emit('message-error', { error: 'Destinataire non spécifié', clientId });
           return;
         }
 
         if (!content && !image) {
           console.error('❌ Contenu manquant');
-          socket.emit('message-error', { error: 'Message vide' });
+          socket.emit('message-error', { error: 'Message vide', clientId });
           return;
         }
 
@@ -81,6 +94,7 @@ module.exports = (io) => {
         );
 
         const message = messages[0];
+        message.clientId = clientId; // Ajouter le clientId pour que le client puisse identifier
         console.log('✅ Message sauvegardé ID:', message.id);
 
         // Émettre au destinataire (socket en temps réel)
@@ -98,7 +112,7 @@ module.exports = (io) => {
           [socket.user.id]
         );
 
-        // ✅ NOTIFICATION PUSH RÉELLE - Envoyer via le contrôleur
+        // ✅ NOTIFICATION PUSH
         try {
           await notificationController.sendPushNotification(
             parseInt(receiverId),
@@ -113,7 +127,7 @@ module.exports = (io) => {
           console.error('❌ Erreur envoi notification push:', pushError);
         }
 
-        // ✅ Notification socket (pour les utilisateurs connectés)
+        // ✅ Notification socket
         io.to(`user:${receiverId}`).emit('new-notification', {
           type: 'message',
           title: `📩 Nouveau message de ${senderInfo[0].prenom}`,
@@ -131,7 +145,7 @@ module.exports = (io) => {
           errorMessage = 'L\'image est trop volumineuse. Maximum 5MB.';
         }
         
-        socket.emit('message-error', { error: errorMessage });
+        socket.emit('message-error', { error: errorMessage, clientId: data.clientId });
       }
     });
 
